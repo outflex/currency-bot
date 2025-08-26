@@ -10,7 +10,8 @@ from datetime import datetime, timedelta
 
 # ===================================
 # ⚠️ ЗАМЕНИ НА СВОЙ ТОКЕН
-TOKEN = "8358744776:AAFjPOhuoNiu8PO6JB6pIJ7xWujlpK_KolU"
+import os
+TOKEN = os.getenv("TOKEN")
 # ===================================
 
 # --- Кэш курсов ---
