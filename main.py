@@ -15,6 +15,8 @@ from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandl
 TOKEN = os.getenv("TOKEN")
 # ===================================
 
+job_queue = JobQueue()
+
 # --- Кэш курсов ---
 class CurrencyCache:
     def __init__(self):
