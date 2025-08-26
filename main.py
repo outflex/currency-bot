@@ -11,7 +11,7 @@ from datetime import datetime, timedelta
 # ===================================
 # ⚠️ ЗАМЕНИ НА СВОЙ ТОКЕН
 import os
-TOKEN = os.getenv("TOKEN")
+TOKEN = os.getenv("8358744776:AAGqopGzMrvPg1vmHdmJrgPrDsmp_6W_dSI")
 # ===================================
 
 # --- Кэш курсов ---
