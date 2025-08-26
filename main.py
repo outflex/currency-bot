@@ -15,8 +15,6 @@ from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandl
 TOKEN = os.getenv("TOKEN")
 # ===================================
 
-job_queue = JobQueue()
-
 # --- Кэш курсов ---
 class CurrencyCache:
     def __init__(self):
@@ -439,10 +437,15 @@ def main():
         print("❌ TOKEN not set")
         return
     print("🚀 Starting CurrencyBot 2.0...")
+    
+    # Создаём JobQueue
+    job_queue = JobQueue()
+    
+    # Создаём приложение
     app = (Application.builder()
-       .token(TOKEN)
-       .job_queue(job_queue)
-       .build())
+           .token(TOKEN)
+           .job_queue(job_queue)
+           .build())
 
     # Обработчики
     app.add_handler(CommandHandler("start", start))
@@ -456,6 +459,10 @@ def main():
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     app.add_handler(CallbackQueryHandler(button_handler))
     app.add_handler(InlineQueryHandler(inline_query))
+
+    # Запуск JobQueue
+    job_queue.set_application(app)
+    job_queue.start()
 
     # Фоновая задача
     app.job_queue.run_repeating(check_alerts, interval=60, first=10)
