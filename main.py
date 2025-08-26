@@ -439,7 +439,7 @@ def main():
     print("🚀 Starting CurrencyBot 2.0...")
     app = (Application.builder()
        .token(TOKEN)
-       .job_queue(True)  # ← Включи JobQueue
+       .job_queue()
        .build())
 
     # Обработчики
