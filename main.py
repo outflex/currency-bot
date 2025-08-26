@@ -437,7 +437,10 @@ def main():
         print("❌ TOKEN not set")
         return
     print("🚀 Starting CurrencyBot 2.0...")
-    app = Application.builder().token(TOKEN).build()
+    app = (Application.builder()
+       .token(TOKEN)
+       .job_queue(True)  # ← Включи JobQueue
+       .build())
 
     # Обработчики
     app.add_handler(CommandHandler("start", start))
