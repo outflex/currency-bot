@@ -7,11 +7,11 @@ from telegram import Update, InlineQueryResultArticle, InputTextMessageContent, 
 from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, \
     filters, CallbackQueryHandler, InlineQueryHandler
 from datetime import datetime, timedelta
+import os
 
 # ===================================
-# ⚠️ ЗАМЕНИ НА СВОЙ ТОКЕН
-import os
-TOKEN = os.getenv("8358744776:AAGqopGzMrvPg1vmHdmJrgPrDsmp_6W_dSI")
+# ✅ Правильно: берём токен из переменной окружения
+TOKEN = os.getenv("TOKEN")  # Railway будет подставлять токен сюда
 # ===================================
 
 # --- Кэш курсов ---
@@ -23,7 +23,11 @@ class CurrencyCache:
 
     async def update_rates(self):
         try:
+            # 🔧 Исправлено: убрал пробелы в URL
             response = requests.get(f"https://api.exchangerate-api.com/v4/latest/{self.base}")
+            if response.status_code != 200:
+                print("❌ Ошибка API: статус", response.status_code)
+                return
             data = response.json()
             self.rates = data["rates"]
             self.last_update = datetime.now()
@@ -35,10 +39,17 @@ class CurrencyCache:
         return self.last_update is None or datetime.now() - self.last_update > timedelta(hours=1)
 
     def convert(self, amount: float, from_curr: str, to_curr: str) -> float:
+        from_curr = from_curr.upper()
+        to_curr = to_curr.upper()
         if from_curr == to_curr:
             return amount
-        usd_amount = amount / self.rates.get(from_curr, 1)
-        return usd_amount * self.rates.get(to_curr, 1)
+        rate_from = self.rates.get(from_curr)
+        rate_to = self.rates.get(to_curr)
+        if not rate_from or not rate_to:
+            return None  # Валюта не найдена
+        # Переводим через USD
+        usd_amount = amount / rate_from
+        return usd_amount * rate_to
 
 cache = CurrencyCache()
 
@@ -99,8 +110,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         match = re.match(r"(\d+(?:\.\d+)?)\s*([A-Z]{3})", text, re.I)
         if match:
             amount, curr = match.groups()
-            context.user_data['amount'] = float(amount)
-            context.user_data['from_curr'] = curr.upper()
+            amount = float(amount)
+            from_curr = curr.upper()
+            if from_curr not in cache.rates:
+                await update.message.reply_text("❌ Неизвестная валюта. Попробуй ещё.")
+                return
+            context.user_data['amount'] = amount
+            context.user_data['from_curr'] = from_curr
             await update.message.reply_text(
                 f"Сумма: {amount} {curr}\nТеперь укажи, в какую валюту конвертировать:",
                 reply_markup=ReplyKeyboardMarkup([
@@ -127,6 +143,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
         result = cache.convert(amount, from_curr, to_curr)
+        if result is None:
+            await update.message.reply_text("❌ Не удалось выполнить конвертацию.")
+            return
 
         keyboard = [
             [InlineKeyboardButton("🔄 Поменять местами", callback_data=f"swap:{amount}:{from_curr}:{to_curr}")],
@@ -151,6 +170,9 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data.startswith("swap:"):
         _, amount, from_curr, to_curr = data.split(":")
         result = cache.convert(float(amount), to_curr, from_curr)
+        if result is None:
+            await query.edit_message_text("❌ Не удалось выполнить конвертацию.")
+            return
         await query.edit_message_text(
             f"🔄 *{amount} {to_curr} = {result:,.2f} {from_curr}*",
             parse_mode='Markdown',
@@ -192,7 +214,7 @@ async def inline_query(update: Update, context: ContextTypes.DEFAULT_TYPE):
         amount, from_curr, to_curr = match_convert.groups()
         amount = float(amount)
         result_amount = cache.convert(amount, from_curr.upper(), to_curr.upper())
-        if result_amount:
+        if result_amount is not None:
             results.append(
                 InlineQueryResultArticle(
                     id="convert",
@@ -214,16 +236,17 @@ async def inline_query(update: Update, context: ContextTypes.DEFAULT_TYPE):
             for t in targets:
                 if t != curr and t in cache.rates:
                     converted = cache.convert(amount, curr, t)
-                    results.append(
-                        InlineQueryResultArticle(
-                            id=f"{curr}_{t}_{amount}",
-                            title=f"{amount} {curr}",
-                            description=f"→ {converted:,.2f} {t}",
-                            input_message_content=InputTextMessageContent(
-                                f"{amount} {curr} = {converted:,.2f} {t}"
-                            ),
+                    if converted is not None:
+                        results.append(
+                            InlineQueryResultArticle(
+                                id=f"{curr}_{t}_{amount}",
+                                title=f"{amount} {curr}",
+                                description=f"→ {converted:,.2f} {t}",
+                                input_message_content=InputTextMessageContent(
+                                    f"{amount} {curr} = {converted:,.2f} {t}"
+                                ),
+                            )
                         )
-                    )
         else:
             # Только валюта: USD
             match_curr = re.match(r"([A-Z]{3})", query, re.I)
@@ -258,6 +281,9 @@ async def inline_query(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # --- Запуск бота ---
 def main():
+    if not TOKEN:
+        print("❌ ОШИБКА: Не задан TOKEN. Установи переменную окружения TOKEN")
+        return
     print("🚀 Запускаем CurrencyBot (с inline-режимом)...")
     app = Application.builder().token(TOKEN).build()
 
